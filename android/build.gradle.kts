@@ -131,7 +131,10 @@ val buildTasks = androidTargets.map { target ->
             if (useOndk) add("+ondk")
             add("build"); add("--release")
             add("--target"); add(target.rustTriple)
-            if (useOndk) { add("-Z"); add("build-std=std,panic_abort") }
+            if (useOndk) {
+                add("-Z"); add("build-std=std,panic_abort")
+                add("-Z"); add("build-std-features=optimize_for_size")
+            }
             add("--no-default-features"); add("--features"); add("rustls-tls")
         }
         commandLine(*cmd.toTypedArray())

@@ -4,7 +4,7 @@
     <string name="app_name">Payload Extract</string>
     <string name="about">About</string>
     <string name="view_source">View source on</string>
-    <string name="opensource_info">This is an open source project licensed under GPL-2.0</string>
+    <string name="opensource_info">Open source under GPL-2.0</string>
 
     <!-- Input -->
     <string name="local">Local</string>

@@ -4,7 +4,7 @@
     <string name="app_name">Payload Extract</string>
     <string name="about">关于</string>
     <string name="view_source">查看源代码</string>
-    <string name="opensource_info">本项目基于 GPL-2.0 许可证开源</string>
+    <string name="opensource_info">基于 GPL-2.0 开源</string>
 
     <!-- Input -->
     <string name="local">本地</string>

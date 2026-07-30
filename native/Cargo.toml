@@ -2,7 +2,7 @@
 name = "payload-extract-jni"
 version = "0.1.1"
 edition = "2024"
-rust-version = "1.95"
+rust-version = "1.97.1"
 
 [lib]
 crate-type = ["cdylib"]

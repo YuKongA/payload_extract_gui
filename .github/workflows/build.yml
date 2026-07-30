@@ -50,6 +50,8 @@ jobs:
           java-version: 25
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
 
       - uses: actions/cache@v5
         with:
@@ -64,6 +66,8 @@ jobs:
 
       - name: Build ${{ matrix.platform }}
         run: ${{ matrix.build-command }}
+        env:
+          RUST_BUILD_STD: "1"
 
       - name: Rename ${{ matrix.platform }} artifact
         run: mv ${{ matrix.artifact-path }} ${{ matrix.artifact-name }}
@@ -79,7 +83,7 @@ jobs:
   android:
     runs-on: ubuntu-latest
     env:
-      ONDK_VERSION: r30.0
+      ONDK_VERSION: r30.1
     steps:
       - uses: actions/checkout@v6
 
