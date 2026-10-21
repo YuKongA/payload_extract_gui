@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlinSerialization)
+    id("payload.build-logic")
 }
 
 val generatedSrcDir = layout.buildDirectory.dir("generated/projectConfig")

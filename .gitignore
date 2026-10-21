@@ -38,4 +38,4 @@ native/target/
 # Native libraries (build artifacts)
 desktop/resources/
 android/src/main/jniLibs/
-*/.kotlin
+.kotlin/

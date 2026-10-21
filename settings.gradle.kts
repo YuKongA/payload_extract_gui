@@ -31,6 +31,8 @@ dependencyResolutionManagement {
     }
 }
 
+includeBuild("build-logic")
+
 include(":shared")
 include(":android")
 include(":desktop")
