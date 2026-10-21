@@ -97,7 +97,7 @@ A cross-platform GUI application for extracting Android OTA `payload.bin` files,
 
 ### 致谢
 
-- [payload_extract_rs](https://github.com/AceDev15/payload_extract_rs) — payload 提取库
+- [payload_extract_rs](https://github.com/YuKongA/payload_extract_rs) — payload 提取库
 - [Miuix](https://github.com/YuKongA/miuix) — UI 组件库
 
 ### 许可证
