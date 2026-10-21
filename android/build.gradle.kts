@@ -149,7 +149,7 @@ val buildTasks = androidTargets.map { target ->
         if (useOndk) {
             // Rebuild std + LTO the C deps into the Android artifact; --target scopes it off the host.
             environment("RUSTC_BOOTSTRAP", "1")
-            environment("RUSTFLAGS", "-Clinker-plugin-lto")
+            environment("RUSTFLAGS", "-Clinker-plugin-lto -C force-unwind-tables=no")
             environment("CFLAGS_$envTarget", "-flto")
             environment("CXXFLAGS_$envTarget", "-flto")
         }

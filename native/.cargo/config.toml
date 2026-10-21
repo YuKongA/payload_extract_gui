@@ -1,0 +1,8 @@
+[target.'cfg(target_os = "linux")']
+rustflags = ["-C", "force-unwind-tables=no"]
+
+[target.'cfg(target_os = "android")']
+rustflags = ["-C", "force-unwind-tables=no"]
+
+[target.'cfg(target_os = "windows")']
+rustflags = ["-C", "link-arg=/OPT:ICF"]
