@@ -160,13 +160,13 @@ val buildTasks = androidTargets.map { target ->
     }
 }
 
-val buildNativeLibForAndroid by tasks.registering {
+val buildNativeLibForAndroid = tasks.register("buildNativeLibForAndroid") {
     group = "native"
     description = "Build Rust JNI library for all Android targets"
     dependsOn(buildTasks)
 }
 
-val copyNativeLibsForAndroid by tasks.registering {
+val copyNativeLibsForAndroid = tasks.register("copyNativeLibsForAndroid") {
     group = "native"
     description = "Copy built .so files to jniLibs"
     dependsOn(buildNativeLibForAndroid)

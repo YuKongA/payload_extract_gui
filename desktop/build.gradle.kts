@@ -47,7 +47,7 @@ val cargoTargetDir = if (hostTriple != null) {
     nativeDir.dir("target/release")
 }
 
-val buildNativeLib by tasks.registering(Exec::class) {
+val buildNativeLib = tasks.register<Exec>("buildNativeLib") {
     group = "native"
     description = "Build the Rust JNI native library${if (useBuildStd) " (build-std)" else ""}"
     workingDir = nativeDir.asFile
@@ -68,7 +68,7 @@ val buildNativeLib by tasks.registering(Exec::class) {
 }
 
 // Copy native lib to a known location for development
-val copyNativeLibForDev by tasks.registering(Copy::class) {
+val copyNativeLibForDev = tasks.register<Copy>("copyNativeLibForDev") {
     group = "native"
     description = "Copy native library for development use"
     dependsOn(buildNativeLib)
@@ -79,7 +79,7 @@ val copyNativeLibForDev by tasks.registering(Copy::class) {
 // For packaging: copy to appResources
 val appResourcesDir = layout.projectDirectory.dir("resources")
 
-val copyNativeLibForPackage by tasks.registering(Copy::class) {
+val copyNativeLibForPackage = tasks.register<Copy>("copyNativeLibForPackage") {
     group = "native"
     description = "Copy native library to appResources for packaging"
     dependsOn(buildNativeLib)
