@@ -35,6 +35,12 @@ jobs:
             artifact-path: desktop/build/compose/binaries/main-release/app/payload-extract-gui
             artifact-name: payload-extract-gui-linux-x64-bin
             archive: true
+          - os: ubuntu-24.04-arm
+            platform: linux arm64
+            build-command: ./gradlew createReleaseDistributable
+            artifact-path: desktop/build/compose/binaries/main-release/app/payload-extract-gui
+            artifact-name: payload-extract-gui-linux-arm64-bin
+            archive: true
           - os: windows-latest
             platform: windows x64
             build-command: ./gradlew createReleaseDistributable

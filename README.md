@@ -25,7 +25,7 @@ On Android, select a local output folder before extracting. The app remembers th
 | -------- | ----------------- |
 | Windows  | x86_64            |
 | macOS    | aarch64           |
-| Linux    | x86_64            |
+| Linux    | x86_64, aarch64   |
 | Android  | arm64-v8a, x86_64 |
 
 ### Build
@@ -79,7 +79,7 @@ Android 提取前请选择本地输出目录，应用会记住已授权的位置
 | ------- | ----------------- |
 | Windows | x86_64            |
 | macOS   | aarch64           |
-| Linux   | x86_64            |
+| Linux    | x86_64, aarch64   |
 | Android | arm64-v8a, x86_64 |
 
 ### 构建

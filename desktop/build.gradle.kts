@@ -86,9 +86,11 @@ val copyNativeLibForPackage = tasks.register<Copy>("copyNativeLibForPackage") {
     description = "Copy native library to appResources for packaging"
     dependsOn(buildNativeLib)
     from(cargoTargetDir.file(nativeLibName))
+    val osArch: String = System.getProperty("os.arch").lowercase()
     val targetDir = when {
         osName.contains("win") -> "windows-x64"
         osName.contains("mac") -> "macos-arm64"
+        osArch == "aarch64" || osArch == "arm64" -> "linux-arm64"
         else -> "linux-x64"
     }
     into(appResourcesDir.dir(targetDir))
