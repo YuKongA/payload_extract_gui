@@ -156,6 +156,7 @@ val buildTasks = androidTargets.map { target ->
         }
         inputs.dir(nativeDir.dir("src"))
         inputs.file(nativeDir.file("Cargo.toml"))
+        inputs.file(nativeDir.file("Cargo.lock"))
         inputs.property("useOndk", useOndk)
         outputs.file(nativeDir.dir("target/${target.rustTriple}/release/libpayload_extract_jni.so"))
     }

@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,22 +20,36 @@ import model.ExtractProgress
 import model.PartitionInfo
 import model.PayloadMetadata
 import native.PayloadExtractNative
-import util.defaultOutputDir
+import util.SelectedFile
+import util.initialOutputDir
+import util.extractPartitionToOutput
 import util.prefGet
 import util.prefSet
 
 class AppViewModel {
     // Input
-    var inputPath by mutableStateOf("")
+    private data class SelectedInput(val path: String, val displayName: String)
+    private var selectedInput by mutableStateOf(SelectedInput("", ""))
+    val inputDisplayName: String
+        get() = selectedInput.displayName
     var isLoading by mutableStateOf(false)
         private set
+
+    fun selectFile(file: SelectedFile) {
+        selectedInput = SelectedInput(file.path, file.displayName)
+    }
+
+    fun setInputUrl(url: String) {
+        selectedInput = SelectedInput(url, url)
+    }
 
     // Payload data
     var metadata by mutableStateOf<PayloadMetadata?>(null)
         private set
     var partitions by mutableStateOf<List<PartitionInfo>>(emptyList())
         private set
-    private var nativeHandle = 0L
+    private data class LoadedPayload(val handle: Long, val input: SelectedInput)
+    private var loadedPayload: LoadedPayload? = null
 
     // Search
     var searchQuery by mutableStateOf("")
@@ -47,7 +62,7 @@ class AppViewModel {
         }
 
     // Extract settings (persisted)
-    var outputDir by mutableStateOf(prefGet("outputDir") ?: defaultOutputDir())
+    var outputDir by mutableStateOf(initialOutputDir())
     var threadCount by mutableIntStateOf(prefGet("threadCount")?.toIntOrNull() ?: 0)
     var verifyHash by mutableStateOf(prefGet("verifyHash")?.toBooleanStrictOrNull() ?: false)
 
@@ -101,7 +116,8 @@ class AppViewModel {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun loadPayload() {
-        if (inputPath.isBlank()) return
+        val sourceInput = selectedInput
+        if (sourceInput.path.isBlank()) return
         closePayload()
 
         isLoading = true
@@ -114,9 +130,9 @@ class AppViewModel {
         scope.launch {
             try {
                 val handle = withContext(Dispatchers.IO) {
-                    PayloadExtractNative.open(inputPath)
+                    PayloadExtractNative.open(sourceInput.path)
                 }
-                nativeHandle = handle
+                loadedPayload = LoadedPayload(handle, sourceInput)
 
                 val partitionsJson = withContext(Dispatchers.IO) {
                     PayloadExtractNative.listPartitionsJson(handle, true)
@@ -139,14 +155,23 @@ class AppViewModel {
     }
 
     fun extractPartition(name: String) {
-        if (inputPath.isBlank() || outputDir.isBlank()) return
+        val payload = loadedPayload ?: return
+        if (outputDir.isBlank()) return
         if (currentPartition == name) return
 
         failedPartitions = failedPartitions - name
+        // Retain before dispatch: SAF preparation may outlive a reparse or disposal.
+        val extractionHandle = try {
+            PayloadExtractNative.retain(payload.handle)
+        } catch (e: Exception) {
+            failedPartitions = failedPartitions + (name to (e.message ?: "Unknown error"))
+            return
+        }
 
         val token = nextToken++
-        val isUrl = inputPath.startsWith("http://") || inputPath.startsWith("https://")
-        val targetDir = extractOutputDir()
+        val isUrl = payload.input.path.startsWith("http://") || payload.input.path.startsWith("https://")
+        val targetDir = outputDir
+        val targetSubdir = extractOutputSubdir(payload.input)
         extractJobs[name]?.cancel()
         extractJobs[name] = scope.launch {
             currentPartition = name
@@ -170,11 +195,13 @@ class AppViewModel {
             }
             try {
                 withContext(Dispatchers.IO) {
-                    PayloadExtractNative.extractPartition(
-                        inputPath, targetDir, name, threadCount, verifyHash, token
+                    extractPartitionToOutput(
+                        extractionHandle, targetDir, targetSubdir, name, threadCount, verifyHash, token
                     )
                 }
                 completedPartitions = completedPartitions + name
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 failedPartitions = failedPartitions + (name to (e.message ?: "Unknown error"))
             } finally {
@@ -185,32 +212,33 @@ class AppViewModel {
                 }
                 extractJobs.remove(name)
             }
+        }.also { job ->
+            // Release on completion, including cancellation before the coroutine starts.
+            job.invokeOnCompletion { PayloadExtractNative.close(extractionHandle) }
         }
     }
 
-    /**
-     * Per-payload output subfolder: `<outputDir>/<input file name without .zip/.bin>`,
-     * so extractions from different ROMs don't mix. Joined with '/' (the native side's
-     * Rust `Path` accepts forward slashes on Windows too). Falls back to "payload".
-     */
-    private fun extractOutputDir(): String {
-        val fileName = inputPath
+    /** Per-payload subfolder name, joined to the destination by the platform. */
+    private fun extractOutputSubdir(input: SelectedInput): String {
+        val sourceName = if (input.path.startsWith("http://") || input.path.startsWith("https://")) {
+            input.path.substringBefore('?')
+        } else {
+            input.displayName
+        }
+        val fileName = sourceName
             .substringAfterLast('/')
             .substringAfterLast('\\')
-            .substringBefore('?')
-        val base = when {
+        return when {
             fileName.endsWith(".zip", ignoreCase = true) -> fileName.dropLast(4)
             fileName.endsWith(".bin", ignoreCase = true) -> fileName.dropLast(4)
             else -> fileName
         }.replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "payload" }
-        return outputDir.trimEnd('/', '\\') + "/" + base
     }
 
     private fun closePayload() {
-        if (nativeHandle != 0L) {
-            PayloadExtractNative.close(nativeHandle)
-            nativeHandle = 0L
-        }
+        val payload = loadedPayload ?: return
+        loadedPayload = null
+        PayloadExtractNative.close(payload.handle)
     }
 
     fun dispose() {

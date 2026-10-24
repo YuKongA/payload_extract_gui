@@ -2,9 +2,12 @@ package native
 
 expect object PayloadExtractNative {
     fun open(input: String): Long
+
+    /** Returns an independently owned reference to the same parsed payload session. */
+    fun retain(handle: Long): Long
     fun listPartitionsJson(handle: Long, withHash: Boolean): String
     fun getMetadataJson(handle: Long): String
-    fun extractPartition(input: String, outputDir: String, partitionName: String, threads: Int, verify: Boolean, token: Long)
+    fun extractPartition(handle: Long, outputDir: String, partitionName: String, threads: Int, verify: Boolean, token: Long)
 
     /**
      * Polls two-phase extraction progress for [token]. Returns `-1` when there is no active

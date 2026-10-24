@@ -8,12 +8,19 @@ rust-version = "1.97.1"
 crate-type = ["cdylib"]
 
 [dependencies]
-payload-extract = { git = "https://github.com/YuKongA/payload_extract_rs", default-features = false }
+payload-extract = { git = "https://github.com/YuKongA/payload_extract_rs", rev = "3ddfb6702fe606a2b2cc255e0957051416c83008", default-features = false }
 jni = "0.22"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 hex = { version = "0.4", default-features = false, features = ["std"] }
 anyhow = "1"
+memmap2 = "0.9"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
 
 [profile.release]
 opt-level = "z"

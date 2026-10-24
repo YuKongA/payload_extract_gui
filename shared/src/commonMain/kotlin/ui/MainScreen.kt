@@ -81,7 +81,7 @@ fun Dialogs(
         show = viewModel.showUrlDialog,
         onDismiss = { viewModel.showUrlDialog = false },
         onConfirm = { url ->
-            viewModel.inputPath = url
+            viewModel.setInputUrl(url)
             viewModel.showUrlDialog = false
         },
     )

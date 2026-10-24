@@ -37,11 +37,11 @@ fun CompactContent(
         contentPadding = innerPadding,
     ) {
         inputSection(
-            inputPath = viewModel.inputPath,
+            inputDisplayName = viewModel.inputDisplayName,
             isLoading = viewModel.isLoading,
             onSelectFile = {
-                filePicker.pickFile(selectFileTitle, listOf(".bin", ".zip")) { path ->
-                    if (path != null) viewModel.inputPath = path
+                filePicker.pickFile(selectFileTitle, listOf(".bin", ".zip")) { file ->
+                    if (file != null) viewModel.selectFile(file)
                 }
             },
             onInputUrl = { viewModel.showUrlDialog = true },
@@ -70,6 +70,7 @@ fun CompactContent(
                 failedPartitions = viewModel.failedPartitions,
                 currentPartition = viewModel.currentPartition,
                 partitionProgress = viewModel.partitionProgress,
+                extractionEnabled = viewModel.outputDir.isNotBlank(),
                 onExtract = { viewModel.extractPartition(it) },
                 onDetail = { viewModel.openPartitionDetail(it) },
             )

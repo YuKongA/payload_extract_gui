@@ -1,9 +1,17 @@
+mod document_input;
+mod document_output;
+mod session;
+
+#[cfg(all(test, target_os = "linux"))]
+mod session_tests;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::ptr;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 
+use anyhow::Context;
 use jni::errors::ThrowRuntimeExAndDefault;
 use jni::objects::{JClass, JString};
 use jni::strings::JNIString;
@@ -13,7 +21,6 @@ use serde::Serialize;
 
 use payload_extract::extract::{self, ExtractConfig};
 use payload_extract::input::{self, OpenOptions, ProgressCallback};
-use payload_extract::payload::PayloadView;
 
 /// Helper: throw a Java exception and return null.
 fn throw_and_return_null(env: &mut Env, msg: &str) -> jstring {
@@ -25,14 +32,6 @@ fn throw_and_return_null(env: &mut Env, msg: &str) -> jstring {
 fn get_string(env: &mut Env, s: &JString) -> Result<String, String> {
     s.try_to_string(env)
         .map_err(|e| format!("Failed to get string: {e}"))
-}
-
-/// Helper: get PayloadView reference from a handle (raw pointer).
-///
-/// # Safety
-/// The caller must ensure the handle is a valid pointer returned by `open`.
-unsafe fn get_payload<'a>(handle: jlong) -> &'a PayloadView {
-    unsafe { &*(handle as *const PayloadView) }
 }
 
 // ============================================================
@@ -75,6 +74,73 @@ fn progress_sink(cell: Arc<ProgressCell>, phase: u8) -> ProgressCallback {
         cell.current.store(current, Ordering::Relaxed);
     })
 }
+enum ExtractionOutput<'a> {
+    Directory(&'a Path),
+    File(&'a std::fs::File),
+}
+
+fn extract_partition(
+    session: &session::Session,
+    temp_dir: &Path,
+    part_name: &str,
+    threads: jint,
+    verify: bool,
+    token: jlong,
+    output: ExtractionOutput<'_>,
+) -> anyhow::Result<()> {
+    let is_http = session.input.starts_with("http://") || session.input.starts_with("https://");
+    let cell = Arc::new(ProgressCell {
+        phase: AtomicU8::new(if is_http {
+            PHASE_DOWNLOAD
+        } else {
+            PHASE_EXTRACT
+        }),
+        current: AtomicU64::new(0),
+        total: AtomicU64::new(0),
+    });
+    if let Ok(mut map) = EXTRACT_PROGRESS.lock() {
+        map.insert(token, cell.clone());
+    }
+    let _guard = ProgressGuard(token);
+
+    let partition_names = [part_name.to_owned()];
+    // HTTP metadata sessions lack operation blobs; local sessions are complete.
+    let downloaded;
+    let payload = if is_http {
+        std::fs::create_dir_all(temp_dir).context("Failed to create download cache directory")?;
+        let open_opts = OpenOptions {
+            insecure: false,
+            user_agent: None,
+            download_progress: Some(progress_sink(cell.clone(), PHASE_DOWNLOAD)),
+            temp_dir: Some(PathBuf::from(temp_dir)),
+        };
+        downloaded = input::open_for_extract_with(&session.input, &partition_names, &open_opts)
+            .context("Failed to open payload for extraction")?;
+        &downloaded
+    } else {
+        &session.payload
+    };
+
+    cell.phase.store(PHASE_EXTRACT, Ordering::Relaxed);
+    cell.current.store(0, Ordering::Relaxed);
+    let config = ExtractConfig {
+        verify_ops: verify,
+        threads: threads as usize,
+        quiet: true,
+        source_dir: None,
+        out_config: None,
+        progress: Some(progress_sink(cell, PHASE_EXTRACT)),
+    };
+    match output {
+        ExtractionOutput::Directory(path) => {
+            extract::extract_partitions(payload, path, &partition_names, &config)
+        }
+        ExtractionOutput::File(file) => {
+            extract::extract_partition_to_file(payload, file, part_name, &config)
+        }
+    }
+    .context("Extraction failed")
+}
 
 // ============================================================
 // JNI exports
@@ -102,15 +168,12 @@ pub extern "system" fn Java_native_PayloadExtractNative_open(
                 }
             };
 
-            match input::open(&input_str, false, None) {
-                Ok(payload) => {
-                    let boxed = Box::new(payload);
-                    Ok(Box::into_raw(boxed) as jlong)
-                }
+            match session::open(input_str) {
+                Ok(handle) => Ok(handle),
                 Err(e) => {
                     let _ = env.throw_new(
                         jni_str!("java/lang/RuntimeException"),
-                        JNIString::from(format!("Failed to open payload: {e}").as_str()),
+                        JNIString::from(format!("{e:#}")),
                     );
                     Ok(0)
                 }
@@ -129,7 +192,11 @@ pub extern "system" fn Java_native_PayloadExtractNative_listPartitionsJson(
 ) -> jstring {
     unowned_env
         .with_env(|env| -> Result<jstring, jni::errors::Error> {
-            let payload = unsafe { get_payload(handle) };
+            let session = match session::get(handle) {
+                Ok(session) => session,
+                Err(e) => return Ok(throw_and_return_null(env, &e.to_string())),
+            };
+            let payload = &session.payload;
 
             #[derive(Serialize)]
             struct PartitionEntry {
@@ -190,7 +257,11 @@ pub extern "system" fn Java_native_PayloadExtractNative_getMetadataJson(
 ) -> jstring {
     unowned_env
         .with_env(|env| -> Result<jstring, jni::errors::Error> {
-            let payload = unsafe { get_payload(handle) };
+            let session = match session::get(handle) {
+                Ok(session) => session,
+                Err(e) => return Ok(throw_and_return_null(env, &e.to_string())),
+            };
+            let payload = &session.payload;
             let header = payload.header();
             let manifest = payload.manifest();
 
@@ -243,16 +314,14 @@ pub extern "system" fn Java_native_PayloadExtractNative_getMetadataJson(
 
 /// Extract a single partition, publishing two-phase progress under `token`.
 ///
-/// Re-opens the payload with `open_for_extract_with` to ensure blob data is
-/// available (necessary for HTTP URLs, where `open` only downloads metadata).
-/// For HTTP this streams the needed blob into a temp file in the output dir and
-/// reports download progress; then extraction reports per-operation progress.
-/// For local files there is no download phase (fast mmap re-open).
+/// Local input uses the session's parsed, mapped payload. HTTP streams the
+/// needed blob into a temp file in the output dir and reports download progress;
+/// then both input types report per-operation extraction progress.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_native_PayloadExtractNative_extractPartition(
     mut unowned_env: EnvUnowned,
     _class: JClass,
-    input: JString,
+    handle: jlong,
     output_dir: JString,
     partition_name: JString,
     threads: jint,
@@ -261,12 +330,12 @@ pub extern "system" fn Java_native_PayloadExtractNative_extractPartition(
 ) {
     unowned_env
         .with_env(|env| -> Result<(), jni::errors::Error> {
-            let input_str = match get_string(env, &input) {
-                Ok(s) => s,
+            let session = match session::get(handle) {
+                Ok(session) => session,
                 Err(e) => {
                     let _ = env.throw_new(
                         jni_str!("java/lang/RuntimeException"),
-                        JNIString::from(e.as_str()),
+                        JNIString::from(e.to_string()),
                     );
                     return Ok(());
                 }
@@ -294,67 +363,64 @@ pub extern "system" fn Java_native_PayloadExtractNative_extractPartition(
                 }
             };
 
-            // Register a progress cell; the guard removes it on every return path.
-            let cell = Arc::new(ProgressCell {
-                phase: AtomicU8::new(PHASE_DOWNLOAD),
-                current: AtomicU64::new(0),
-                total: AtomicU64::new(0),
-            });
-            if let Ok(mut map) = EXTRACT_PROGRESS.lock() {
-                map.insert(token, cell.clone());
-            }
-            let _guard = ProgressGuard(token);
-
-            let output_path = Path::new(&output_str);
-            // The HTTP temp file is written into the output dir, so ensure it exists.
-            let _ = std::fs::create_dir_all(output_path);
-
-            // Re-open for extraction (downloads blob data for HTTP), reporting
-            // download bytes into the cell. temp_dir = output dir avoids tmpfs and
-            // guarantees a writable location (required on Android).
-            let partition_names = vec![part_name.clone()];
-            let open_opts = OpenOptions {
-                insecure: false,
-                user_agent: None,
-                download_progress: Some(progress_sink(cell.clone(), PHASE_DOWNLOAD)),
-                temp_dir: Some(PathBuf::from(&output_str)),
-            };
-            let payload =
-                match input::open_for_extract_with(&input_str, &partition_names, &open_opts) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        let _ = env.throw_new(
-                            jni_str!("java/lang/RuntimeException"),
-                            JNIString::from(
-                                format!("Failed to open payload for extraction: {e}").as_str(),
-                            ),
-                        );
-                        return Ok(());
-                    }
-                };
-
-            // Download done; switch the cell to the extraction phase.
-            cell.phase.store(PHASE_EXTRACT, Ordering::Relaxed);
-            cell.current.store(0, Ordering::Relaxed);
-
-            let config = ExtractConfig {
-                verify_ops: verify,
-                threads: threads as usize,
-                quiet: true,
-                source_dir: None,
-                out_config: None,
-                progress: Some(progress_sink(cell.clone(), PHASE_EXTRACT)),
-            };
-
-            if let Err(e) =
-                extract::extract_partitions(&payload, output_path, &partition_names, &config)
-            {
+            if let Err(e) = extract_partition(
+                &session,
+                Path::new(&output_str),
+                &part_name,
+                threads,
+                verify,
+                token,
+                ExtractionOutput::Directory(Path::new(&output_str)),
+            ) {
                 let _ = env.throw_new(
                     jni_str!("java/lang/RuntimeException"),
-                    JNIString::from(format!("Extraction failed: {e}").as_str()),
+                    JNIString::from(format!("{e:#}")),
                 );
             }
 
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
+}
+
+/// Extract directly into a Java-owned writable document descriptor. Java must
+/// keep it open for this synchronous call; Rust owns and closes only duplicates.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_native_PayloadExtractNative_extractPartitionToFd(
+    mut unowned_env: EnvUnowned,
+    _class: JClass,
+    handle: jlong,
+    output_fd: jint,
+    temp_dir: JString,
+    partition_name: JString,
+    threads: jint,
+    verify: bool,
+    token: jlong,
+) {
+    unowned_env
+        .with_env(|env| -> Result<(), jni::errors::Error> {
+            let result = (|| -> anyhow::Result<()> {
+                let session = session::get(handle)?;
+                let temp_str = get_string(env, &temp_dir).map_err(anyhow::Error::msg)?;
+                let part_name = get_string(env, &partition_name).map_err(anyhow::Error::msg)?;
+                let file = document_output::duplicate(output_fd)
+                    .context("Failed to duplicate output document descriptor")?;
+                extract_partition(
+                    &session,
+                    Path::new(&temp_str),
+                    &part_name,
+                    threads,
+                    verify,
+                    token,
+                    ExtractionOutput::File(&file),
+                )
+            })();
+            if let Err(e) = result {
+                let _ = env.throw_new(
+                    jni_str!("java/lang/RuntimeException"),
+                    JNIString::from(format!("{e:#}")),
+                );
+            }
             Ok(())
         })
         .resolve::<ThrowRuntimeExAndDefault>();
@@ -364,8 +430,8 @@ pub extern "system" fn Java_native_PayloadExtractNative_extractPartition(
 ///
 /// Returns `-1` when there is no active extraction (not started / finished).
 /// Otherwise returns `(phase << 16) | permille`, where `phase` is 0 (downloading)
-/// or 1 (extracting) and `permille` is 0..=1000. Does no JNI calls, so (like
-/// `close`) it takes the env/class directly without `with_env`.
+/// or 1 (extracting) and `permille` is 0..=1000. Does no JNI calls, so it takes
+/// the env/class directly without `with_env`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_native_PayloadExtractNative_getExtractProgress(
     _env: EnvUnowned,
@@ -393,16 +459,45 @@ pub extern "system" fn Java_native_PayloadExtractNative_getExtractProgress(
     (phase << 16) | permille
 }
 
-/// Close and free the PayloadView handle.
+/// Retain the same parsed session under an independent opaque handle.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_native_PayloadExtractNative_retain(
+    mut unowned_env: EnvUnowned,
+    _class: JClass,
+    handle: jlong,
+) -> jlong {
+    unowned_env
+        .with_env(|env| -> Result<jlong, jni::errors::Error> {
+            match session::retain(handle) {
+                Ok(handle) => Ok(handle),
+                Err(e) => {
+                    let _ = env.throw_new(
+                        jni_str!("java/lang/RuntimeException"),
+                        JNIString::from(e.to_string()),
+                    );
+                    Ok(0)
+                }
+            }
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// Release only this handle; retained handles and in-flight work stay valid.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_native_PayloadExtractNative_close(
-    _env: EnvUnowned,
+    mut unowned_env: EnvUnowned,
     _class: JClass,
     handle: jlong,
 ) {
-    if handle != 0 {
-        unsafe {
-            let _ = Box::from_raw(handle as *mut PayloadView);
-        }
-    }
+    unowned_env
+        .with_env(|env| -> Result<(), jni::errors::Error> {
+            if let Err(e) = session::close(handle) {
+                let _ = env.throw_new(
+                    jni_str!("java/lang/RuntimeException"),
+                    JNIString::from(e.to_string()),
+                );
+            }
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
 }

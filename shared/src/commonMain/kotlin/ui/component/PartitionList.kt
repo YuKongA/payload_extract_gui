@@ -23,6 +23,7 @@ fun LazyListScope.partitionListSection(
     failedPartitions: Map<String, String>,
     currentPartition: String?,
     partitionProgress: Map<String, ExtractProgress>,
+    extractionEnabled: Boolean,
     onExtract: (String) -> Unit,
     onDetail: (PartitionInfo) -> Unit,
 ) {
@@ -59,6 +60,7 @@ fun LazyListScope.partitionListSection(
                 partition = partition,
                 status = status,
                 progress = partitionProgress[partition.name],
+                extractionEnabled = extractionEnabled,
                 onExtract = { onExtract(partition.name) },
                 onDetail = { onDetail(partition) },
             )

@@ -40,6 +40,7 @@ fun PartitionListItem(
     partition: PartitionInfo,
     status: PartitionStatus,
     progress: ExtractProgress?,
+    extractionEnabled: Boolean,
     onExtract: () -> Unit,
     onDetail: () -> Unit,
 ) {
@@ -89,6 +90,7 @@ fun PartitionListItem(
                 PartitionStatus.FAILED -> {
                     Button(
                         onClick = onExtract,
+                        enabled = extractionEnabled,
                         colors = ButtonDefaults.buttonColors(
                             color = MiuixTheme.colorScheme.primary.copy(0.08f),
                             contentColor = MiuixTheme.colorScheme.primary,
@@ -106,6 +108,7 @@ fun PartitionListItem(
                 PartitionStatus.IDLE -> {
                     Button(
                         onClick = onExtract,
+                        enabled = extractionEnabled,
                         colors = ButtonDefaults.buttonColors(
                             color = MiuixTheme.colorScheme.primary.copy(0.08f),
                             contentColor = MiuixTheme.colorScheme.primary,

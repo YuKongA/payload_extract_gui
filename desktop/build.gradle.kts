@@ -64,6 +64,7 @@ val buildNativeLib = tasks.register<Exec>("buildNativeLib") {
     if (useBuildStd) environment("RUSTC_BOOTSTRAP", "1")
     inputs.dir(nativeDir.dir("src"))
     inputs.file(nativeDir.file("Cargo.toml"))
+    inputs.file(nativeDir.file("Cargo.lock"))
     inputs.property("useBuildStd", useBuildStd)
     outputs.file(cargoTargetDir.file(nativeLibName))
 }

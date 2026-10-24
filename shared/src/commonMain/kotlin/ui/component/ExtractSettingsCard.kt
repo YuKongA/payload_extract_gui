@@ -6,7 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
 import payload_extract_gui.shared.generated.resources.Res
-import payload_extract_gui.shared.generated.resources.not_selected
+import payload_extract_gui.shared.generated.resources.select_output_dir_first
 import payload_extract_gui.shared.generated.resources.output_directory
 import payload_extract_gui.shared.generated.resources.settings
 import payload_extract_gui.shared.generated.resources.verify_sha256
@@ -33,7 +33,7 @@ fun LazyListScope.extractSettingsSection(
         ) {
             ArrowPreference(
                 title = stringResource(Res.string.output_directory),
-                summary = outputDir.ifBlank { stringResource(Res.string.not_selected) },
+                summary = outputDir.ifBlank { stringResource(Res.string.select_output_dir_first) },
                 onClick = onSelectOutputDir,
             )
             SwitchPreference(

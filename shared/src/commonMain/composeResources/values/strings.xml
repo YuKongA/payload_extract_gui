@@ -32,7 +32,7 @@
     <!-- Settings -->
     <string name="settings">Settings</string>
     <string name="output_directory">Output Directory</string>
-    <string name="not_selected">Not selected</string>
+    <string name="select_output_dir_first">Select an output directory before extracting</string>
     <string name="verify_sha256">Verify SHA256</string>
     <string name="verify_sha256_summary">Verify hash of each operation</string>
 

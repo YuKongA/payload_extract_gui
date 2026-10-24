@@ -31,7 +31,7 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 fun LazyListScope.inputSection(
-    inputPath: String,
+    inputDisplayName: String,
     isLoading: Boolean,
     onSelectFile: () -> Unit,
     onInputUrl: () -> Unit,
@@ -58,7 +58,7 @@ fun LazyListScope.inputSection(
         }
     }
 
-    if (inputPath.isNotBlank()) {
+    if (inputDisplayName.isNotBlank()) {
         item(key = "input_info") {
             SmallTitle(text = stringResource(Res.string.input))
             Card(
@@ -68,7 +68,7 @@ fun LazyListScope.inputSection(
                     .padding(bottom = 12.dp),
             ) {
                 Text(
-                    text = inputPath,
+                    text = inputDisplayName,
                     modifier = Modifier.padding(16.dp),
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.onSurface,

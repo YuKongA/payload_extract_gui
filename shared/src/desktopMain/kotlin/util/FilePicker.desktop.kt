@@ -7,7 +7,7 @@ import java.io.FilenameFilter
 import javax.swing.JFileChooser
 
 actual class FilePicker {
-    actual fun pickFile(title: String, extensions: List<String>, onResult: (String?) -> Unit) {
+    actual fun pickFile(title: String, extensions: List<String>, onResult: (SelectedFile?) -> Unit) {
         val dialog = FileDialog(null as Frame?, title, FileDialog.LOAD)
         if (extensions.isNotEmpty()) {
             dialog.filenameFilter = FilenameFilter { _, name ->
@@ -18,7 +18,8 @@ actual class FilePicker {
         val file = dialog.file
         val dir = dialog.directory
         if (file != null && dir != null) {
-            onResult(File(dir, file).absolutePath)
+            val path = File(dir, file).absolutePath
+            onResult(SelectedFile(path, path))
         } else {
             onResult(null)
         }
