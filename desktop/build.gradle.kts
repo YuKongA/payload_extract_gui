@@ -122,9 +122,8 @@ compose.desktop {
         }
 
         buildTypes.release.proguard {
-            // Compose's bundled ProGuard maxes out at Java 24; pin a newer release that
-            // understands JDK 25 class files (major version 69).
-            version.set("7.9.1")
+            version.set("7.10.0")
+            optimize.set(true)
             configurationFiles.from("proguard-rules-jvm.pro")
         }
 
