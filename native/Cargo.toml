@@ -8,7 +8,7 @@ rust-version = "1.97.1"
 crate-type = ["cdylib"]
 
 [dependencies]
-payload-extract = { git = "https://github.com/YuKongA/payload_extract_rs", rev = "c4696194a19a88612f2368c2dd3dcb9573d84f20", default-features = false }
+payload-extract = { git = "https://github.com/YuKongA/payload_extract_rs", rev = "dd24b279ac051abbd066aa2a3f0b604deb9d292f", default-features = false }
 jni = "0.22"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

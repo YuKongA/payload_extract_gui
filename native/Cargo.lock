@@ -1066,7 +1066,7 @@ dependencies = [
 [[package]]
 name = "payload-extract"
 version = "0.1.1"
-source = "git+https://github.com/YuKongA/payload_extract_rs?rev=c4696194a19a88612f2368c2dd3dcb9573d84f20#c4696194a19a88612f2368c2dd3dcb9573d84f20"
+source = "git+https://github.com/YuKongA/payload_extract_rs?rev=dd24b279ac051abbd066aa2a3f0b604deb9d292f#dd24b279ac051abbd066aa2a3f0b604deb9d292f"
 dependencies = [
  "anyhow",
  "bsdiff-android",
