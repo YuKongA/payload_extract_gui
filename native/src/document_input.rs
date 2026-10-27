@@ -47,7 +47,7 @@ mod tests {
         file.write_all(manifest).unwrap();
         file.write_all(b"test").unwrap();
         file.seek(SeekFrom::Start(7)).unwrap();
-        file.set_permissions(std::fs::Permissions::from_mode(0))
+        file.set_permissions(std::fs::Permissions::from_mode(0o000))
             .unwrap();
 
         let path = format!("/proc/self/fd/{}", file.as_raw_fd());

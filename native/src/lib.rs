@@ -104,7 +104,7 @@ fn extract_partition(
     let _guard = ProgressGuard(token);
 
     let partition_names = [part_name.to_owned()];
-    // HTTP metadata sessions lack operation blobs; local sessions are complete.
+    let filter = input::PartitionFilter::Include(vec![part_name.to_owned()]);
     let downloaded;
     let payload = if is_http {
         std::fs::create_dir_all(temp_dir).context("Failed to create download cache directory")?;
@@ -113,8 +113,9 @@ fn extract_partition(
             user_agent: None,
             download_progress: Some(progress_sink(cell.clone(), PHASE_DOWNLOAD)),
             temp_dir: Some(PathBuf::from(temp_dir)),
+            concurrency: None,
         };
-        downloaded = input::open_for_extract_with(&session.input, &partition_names, &open_opts)
+        downloaded = input::open_for_extract_with(&session.input, &filter, &open_opts)
             .context("Failed to open payload for extraction")?;
         &downloaded
     } else {

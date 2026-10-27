@@ -93,7 +93,7 @@ mod tests {
         original.write_all(&[0xff; 64]).unwrap();
         original.seek(SeekFrom::Start(7)).unwrap();
         original
-            .set_permissions(std::fs::Permissions::from_mode(0))
+            .set_permissions(std::fs::Permissions::from_mode(0o000))
             .unwrap();
         // Revoke the original pathname even when tests run as root. An open
         // document grant is still usable, just as with a SAF-owned descriptor.
